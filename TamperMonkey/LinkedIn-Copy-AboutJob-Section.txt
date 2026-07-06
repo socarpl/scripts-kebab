@@ -1,0 +1,91 @@
+// ==UserScript==
+// @name         LinkedIn expandable text copy button
+// @namespace    https://linkedin.com/
+// @version      1.0
+// @description  Adds a small copy button above selected LinkedIn expandable text spans
+// @match        https://www.linkedin.com/*
+// @match        https://linkedin.com/*
+// @grant        GM_setClipboard
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const TARGET_SELECTOR =
+        'span[data-testid="expandable-text-box"]';
+
+    const PROCESSED_ATTR = 'data-tm-copy-button-added';
+
+    function addCopyButton(span) {
+        if (span.hasAttribute(PROCESSED_ATTR)) {
+            return;
+        }
+
+        span.setAttribute(PROCESSED_ATTR, 'true');
+
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.display = 'inline-block';
+        wrapper.style.width = '100%';
+
+        const button = document.createElement('button');
+        button.textContent = 'copy';
+
+        button.style.position = 'absolute';
+        button.style.top = '-24px';
+        button.style.right = '0';
+        button.style.zIndex = '99999';
+        button.style.fontSize = '11px';
+        button.style.padding = '2px 6px';
+        button.style.border = '1px solid #999';
+        button.style.borderRadius = '4px';
+        button.style.background = '#fff';
+        button.style.color = '#333';
+        button.style.cursor = 'pointer';
+
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const textToCopy = span.innerText.trim();
+
+            GM_setClipboard(textToCopy, 'text');
+
+            button.textContent = 'copied';
+
+            setTimeout(() => {
+                button.textContent = 'COPY TEXT';
+            }, 1000);
+        });
+
+        const parent = span.parentNode;
+
+        if (!parent) {
+            return;
+        }
+
+        parent.insertBefore(wrapper, span);
+        wrapper.appendChild(button);
+        wrapper.appendChild(span);
+    }
+
+    function scanPage() {
+        const spans = document.querySelectorAll(TARGET_SELECTOR);
+
+        for (const span of spans) {
+            addCopyButton(span);
+        }
+    }
+
+    scanPage();
+
+    const observer = new MutationObserver(() => {
+        scanPage();
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+})();
