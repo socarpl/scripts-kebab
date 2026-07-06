@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         LinkedIn expandable text copy button
+// @name         LinkedIn jobs copy text button
 // @namespace    https://linkedin.com/
-// @version      1.0
-// @description  Adds a small copy button above selected LinkedIn expandable text spans
-// @match        https://www.linkedin.com/*
-// @match        https://linkedin.com/*
+// @version      1.1
+// @description  Adds copy text buttons to LinkedIn job description areas
+// @match        https://www.linkedin.com/jobs/*
+// @match        https://linkedin.com/jobs/*
 // @grant        GM_setClipboard
 // @run-at       document-idle
 // ==/UserScript==
@@ -12,69 +12,99 @@
 (function () {
     'use strict';
 
-    const TARGET_SELECTOR =
+    const PROCESSED_ATTR = 'data-tm-copy-text-button-added';
+    const BUTTON_CLASS = 'tm-linkedin-copy-text-button';
+
+    const VIEW_JOB_SELECTOR =
         'span[data-testid="expandable-text-box"]';
 
-    const PROCESSED_ATTR = 'data-tm-copy-button-added';
+    const COLLECTIONS_JOB_SELECTOR =
+        'div.jobs-description__content.jobs-description-content';
 
-    function addCopyButton(span) {
-        if (span.hasAttribute(PROCESSED_ATTR)) {
-            return;
+    function isJobViewPage() {
+        return /^\/jobs\/view\/\d+\/?$/.test(window.location.pathname);
+    }
+
+    function isJobCollectionsPage() {
+        return /^\/jobs\/collections\//.test(window.location.pathname);
+    }
+
+    function getTargetSelectorForCurrentPage() {
+        if (isJobViewPage()) {
+            return VIEW_JOB_SELECTOR;
         }
 
-        span.setAttribute(PROCESSED_ATTR, 'true');
+        if (isJobCollectionsPage()) {
+            return COLLECTIONS_JOB_SELECTOR;
+        }
 
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'relative';
-        wrapper.style.display = 'inline-block';
-        wrapper.style.width = '100%';
+        return null;
+    }
 
+    function createCopyButton(targetElement) {
         const button = document.createElement('button');
-        button.textContent = 'copy';
 
-        button.style.position = 'absolute';
-        button.style.top = '-24px';
-        button.style.right = '0';
-        button.style.zIndex = '99999';
+        button.textContent = 'Copy text';
+        button.className = BUTTON_CLASS;
+        button.type = 'button';
+
         button.style.fontSize = '11px';
-        button.style.padding = '2px 6px';
-        button.style.border = '1px solid #999';
+        button.style.padding = '3px 7px';
+        button.style.margin = '4px 0';
+        button.style.border = '1px solid #888';
         button.style.borderRadius = '4px';
-        button.style.background = '#fff';
-        button.style.color = '#333';
+        button.style.background = '#ffffff';
+        button.style.color = '#333333';
         button.style.cursor = 'pointer';
+        button.style.zIndex = '99999';
 
         button.addEventListener('click', function (event) {
             event.preventDefault();
             event.stopPropagation();
 
-            const textToCopy = span.innerText.trim();
+            const textToCopy = targetElement.innerText.trim();
 
             GM_setClipboard(textToCopy, 'text');
 
             button.textContent = 'copied';
 
             setTimeout(() => {
-                button.textContent = 'COPY TEXT';
+                button.textContent = 'Copy text';
             }, 1000);
         });
 
-        const parent = span.parentNode;
+        return button;
+    }
 
-        if (!parent) {
+    function addCopyButton(targetElement) {
+        if (targetElement.hasAttribute(PROCESSED_ATTR)) {
             return;
         }
 
-        parent.insertBefore(wrapper, span);
-        wrapper.appendChild(button);
-        wrapper.appendChild(span);
+        targetElement.setAttribute(PROCESSED_ATTR, 'true');
+
+        const button = createCopyButton(targetElement);
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.width = '100%';
+        buttonContainer.appendChild(button);
+
+        targetElement.parentNode.insertBefore(buttonContainer, targetElement);
     }
 
     function scanPage() {
-        const spans = document.querySelectorAll(TARGET_SELECTOR);
+        const selector = getTargetSelectorForCurrentPage();
 
-        for (const span of spans) {
-            addCopyButton(span);
+        if (!selector) {
+            return;
+        }
+
+        const targets = document.querySelectorAll(selector);
+
+        for (const target of targets) {
+            addCopyButton(target);
         }
     }
 
