@@ -1,25 +1,52 @@
-# Relaunch as admin if not already
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Write-Host "Not running as admin. Restarting as administrator..."
-    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
-}
-
-# Load InputBox
 Add-Type -AssemblyName Microsoft.VisualBasic
-$folder = [Microsoft.VisualBasic.Interaction]::InputBox("Enter directory path:", "Directory Selection", "")
 
-# If folder is valid, delete Thumbs.db
-if (Test-Path $folder) {
-    $files = Get-ChildItem -Path $folder -Recurse -Filter "Thumbs.db" -Force -ErrorAction SilentlyContinue
-    $count = $files.Count
+$Root = 'D:\'
 
-    if ($count -gt 0) {
-        $files | Remove-Item -Force -ErrorAction SilentlyContinue
-        Write-Host "$count Thumbs.db file(s) deleted from $folder"
-    } else {
-        Write-Host "No Thumbs.db files found in $folder"
+function Remove-ThumbsDbToRecycleBin {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$StartPath
+    )
+
+    $stack = New-Object System.Collections.Stack
+    $stack.Push($StartPath)
+
+    while ($stack.Count -gt 0) {
+        $currentPath = $stack.Pop()
+
+        # First, try to delete Thumbs.db in the current folder
+        try {
+            Get-ChildItem -LiteralPath $currentPath -Force -File -ErrorAction Stop |
+                Where-Object { $_.Name -ieq 'Thumbs.db' } |
+                ForEach-Object {
+                    try {
+                        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(
+                            $_.FullName,
+                            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
+                            [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
+                        )
+                        Write-Host "[OK] $($_.FullName)"
+                    }
+                    catch {
+                        Write-Host "[SKIP] $($_.FullName) -- $($_.Exception.Message)"
+                    }
+                }
+        }
+        catch {
+            Write-Host "[SKIP] Cannot access files in $currentPath -- $($_.Exception.Message)"
+        }
+
+        # Then, recurse into subfolders
+        try {
+            Get-ChildItem -LiteralPath $currentPath -Force -Directory -ErrorAction Stop |
+                ForEach-Object {
+                    $stack.Push($_.FullName)
+                }
+        }
+        catch {
+            Write-Host "[SKIP] Cannot access folders in $currentPath -- $($_.Exception.Message)"
+        }
     }
-} else {
-    Write-Host "Invalid path: $folder"
 }
+
+Remove-ThumbsDbToRecycleBin -StartPath $Root
